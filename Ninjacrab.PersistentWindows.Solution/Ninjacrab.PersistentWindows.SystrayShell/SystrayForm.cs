@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Forms;
 using System.Net;
+using System.Timers;
 using System.IO;
 using System.IO.Compression;
 
@@ -13,11 +14,6 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
 {
     public partial class SystrayForm : Form
     {
-        private Timer uiRefreshTimer = new Timer();
-
-        public volatile bool enableRefresh = false;
-        public bool enableRestoreFromDB = false;
-
         private bool pauseAutoRestore = false;
 
         public bool enableUpgradeNotice = true;
@@ -36,26 +32,37 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
 
         private DateTime clickTime;
 
-        private System.Threading.Timer clickDelayTimer;
+        private System.Timers.Timer clickDelayTimer;
 
         private Dictionary<string, bool> upgradeDownloaded = new Dictionary<string, bool>();
 
         public SystrayForm()
         {
-            uiRefreshTimer.Interval = 2000;
-            uiRefreshTimer.Tick += new EventHandler(TimerEventProcessor);
-            uiRefreshTimer.Enabled = true;
-
-            clickDelayTimer = new System.Threading.Timer(state =>
-            {
-                TimerCallBack();
-            });
-
             InitializeComponent();
+
+            clickDelayTimer = new System.Timers.Timer(1000);
+            clickDelayTimer.Elapsed += ClickTimerCallBack;
+            clickDelayTimer.SynchronizingObject = this.contextMenuStripSysTray;
+            clickDelayTimer.AutoReset = false;
+            clickDelayTimer.Enabled = false;
         }
 
-        private void TimerCallBack()
+        public void StartTimer(int milliseconds)
         {
+            clickDelayTimer.Interval = milliseconds;
+            clickDelayTimer.AutoReset = false;
+            clickDelayTimer.Enabled = true;
+        }
+
+        private void ClickTimerCallBack(Object source, ElapsedEventArgs e)
+        {
+            if (clickCount == 0)
+            {
+                // fix context menu position
+                contextMenuStripSysTray.Show(Cursor.Position);
+                return;
+            }
+
             pauseUpgradeCounter = true;
 
             int keyPressed = -1;
@@ -146,31 +153,25 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
 
         }
 
-        private void TimerEventProcessor(Object myObject, EventArgs myEventArgs)
+        //private void TimerEventProcessor(Object myObject, EventArgs myEventArgs)
+        public void UpdateMenuEnable(bool enableRestoreFromDB)
         {
-            if (enableRefresh)
+            restoreToolStripMenuItem.Enabled = enableRestoreFromDB;
+
+            if (enableUpgradeNotice)
             {
-#if DEBUG
-                Program.LogEvent("ui refresh timer triggered");
-#endif
-                restoreToolStripMenuItem.Enabled = enableRestoreFromDB;
-                enableRefresh = false;
-
-                if (enableUpgradeNotice)
+                if (pauseUpgradeCounter)
                 {
-                    if (pauseUpgradeCounter)
+                    pauseUpgradeCounter = false;
+                }
+                else
+                {
+                    if (skipUpgradeCounter == 0)
                     {
-                        pauseUpgradeCounter = false;
+                        CheckUpgrade();
                     }
-                    else
-                    {
-                        if (skipUpgradeCounter == 0)
-                        {
-                            CheckUpgrade();
-                        }
 
-                        skipUpgradeCounter = (skipUpgradeCounter + 1) % 7;
-                    }
+                    skipUpgradeCounter = (skipUpgradeCounter + 1) % 31;
                 }
             }
         }
@@ -277,8 +278,14 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             char snapshot_char = Program.EnterSnapshotName();
             int id = Program.SnapshotCharToId(snapshot_char);
             if (id != -1)
+            {
+                // for debug issue #109 only
+                //Program.ChangeZorderMethod();
+
                 Program.RestoreSnapshot(id);
+            }
         }
+
 
         private void PauseResumeAutoRestore(object sender, EventArgs e)
         {
@@ -328,7 +335,7 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
 
         private void IconMouseClick(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
+            if (!doubleClick && e.Button == MouseButtons.Left)
             {
                 firstClick = true;
                 clickTime = DateTime.Now;
@@ -344,7 +351,6 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                 {
                     User32.GetAsyncKeyState(i);
                 }
-
             }
         }
 
@@ -353,10 +359,11 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             if (e.Button == MouseButtons.Left)
             {
                 DateTime now = DateTime.Now;
-                var diff = now.Subtract(clickTime);
-                if (diff.TotalMilliseconds < 40)
+                var ms = now.Subtract(clickTime).TotalMilliseconds;
+                Console.WriteLine("{0}", ms);
+                if (ms < 30 || ms > 200)
                 {
-                    Program.LogError("ignore bogus double click");
+                    Program.LogError($"ignore bogus double click {ms} ms");
                     return;
                 }
 
@@ -390,7 +397,11 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                 Console.WriteLine("Up");
 
                 clickCount++;
-                clickDelayTimer.Change(400, System.Threading.Timeout.Infinite);
+                StartTimer(400);
+            }
+            else if (e.Button == MouseButtons.Right)
+            {
+                StartTimer(5);
             }
         }
     }

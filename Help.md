@@ -3,18 +3,20 @@
 * PW command line options
   | Command line option | Meaning |
   | --- | --- |
+  | -delay_start \<seconds\> | Delay application startup by specified seconds, useful if PW autostart fails to show icon due to Windows upgrade.
+  | -redirect_appdata | Use current dir instead of user appdata dir to store database file, this option is also useful for launching multiple PW instances.
   | -splash=0       | No splash window at PW startup
-  | -redirect_appdata | Use current dir instead of user appdata dir to store database file, this option allows launching multiple PW instances.
   | -prompt_session_restore | Upon resuming last session, ask user before restore window layout, this may help to reduce total restore time for remote desktop session on slow internet connection.
   | -notification=1 | Turn on balloon tip and sound notification when restoring windows
   | -halt_restore \<seconds\> | Delay auto restore by specified seconds in case monitor fails to go to sleep due to fast off-on-off switching.
   | -redraw_desktop | redraw whole desktop windows after restore
   | -fix_zorder=1   | Turn on z-order fix for automatic restore
   | -fix_offscreen_window=0 | Turn off auto correction of off-screen window
-  | -fix_unminimized_window=0 | Turn off auto restore of unminimized window
+  | -fix_unminimized_window=0 | Turn off auto restore of unminimized window. Use this switch to avoid undesirable window shifting during window activation, which comes with Event id 9999 : "restore minimized window ...." in event viewer.
   | ‑auto_restore_missing_windows=1 | Restore missing windows from disk without prompting user
   | ‑auto_restore_missing_windows=2 | Automatic restore missing windows from disk at startup, user will be prompted before restore each missing window
   | ‑auto_restore_missing_windows=3 | Automatic restore missing windows from disk at startup without prompting user
+  | -restore_one_window_per_process=1 | Avoid launching multiple windows corresponding to one process when restore from DB.
   | -check_upgrade=0 | Disable PW upgrade check from beginning
   | -auto_upgrade=1 | Upgrade PW automatically without user interaction
 
@@ -25,8 +27,6 @@
   | --- | --- |
   | Capture snapshot 0 | Double click PW icon
   | Restore snapshot 0 | Click PW icon
-  | Capture snapshot N | Shift click PW icon N times (N = 1, 2, 3)
-  | Restore snapshot N |  Ctrl click PW icon N times
   | Capture snapshot X | Double click PW icon then immediately press key X (X represents a digit [0-9] or a letter [a-z])
   | Restore snapshot X | Click PW icon then immediately press key X
   | Undo last snapshot restore | Alt click PW icon
@@ -43,7 +43,7 @@
   * Send remote desktop or vncviewer window to bottom z-order (because Alt+Esc hotkey does not work for them)
     * Defocus rdp window first, then hold Ctrl+Win keys and click the rdp window
 
-* Enable/Disable auto restore for a particular window
-  * To add a (child/dialog) window for auto capture/restore, move the window using mouse
-  * To remove a window from auto capture/restore, hold Ctrl+Shift keys then move the window using mouse
+* Enable/Disable auto restore for any (child or dialog) window
+  * To add such window for auto capture/restore, move the window using mouse
+  * To remove such window from auto capture/restore, hold Ctrl+Shift keys then move the window
 ```

@@ -33,15 +33,18 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             bool redirect_appdata = false; // use "." instead of appdata/local/PersistentWindows to store db file
             bool prompt_session_restore = false;
             int  halt_restore = 0; //seconds to wait before trying restore again, due to frequent monitor config changes
+            bool halt_restore_specified = false;
             bool dry_run = false; //dry run mode without real restore, for debug purpose only
             bool fix_zorder = false;
             bool fix_zorder_specified = false;
+            bool show_desktop = false; //show desktop when display changes
             bool redraw_desktop = false;
             bool offscreen_fix = true;
             bool fix_unminimized_window = true;
             bool enhanced_offscreen_fix = false;
             bool auto_restore_missing_windows = false;
             bool auto_restore_from_db_at_startup = false;
+            bool restore_one_window_per_process = false;
             bool check_upgrade = true;
             bool auto_upgrade = false;
 
@@ -49,14 +52,17 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             {
                 CmdArgs += arg + " ";
 
-                if (halt_restore != 0)
+                if (halt_restore_specified)
                 {
+                    halt_restore_specified = false;
                     halt_restore = Int32.Parse(arg);
                     continue;
                 }
                 else if (delay_start != 0)
                 {
-                    Thread.Sleep(Int32.Parse(arg));
+                    delay_start = 0;
+                    Thread.Sleep(Int32.Parse(arg) * 1000);
+                    continue;
                 }
 
                 switch(arg)
@@ -74,6 +80,10 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                         break;
                     case "-redirect_appdata":
                         redirect_appdata = true;
+                        break;
+                    case "-show_desktop_when_display_changes":
+                        LogEvent("show desktop = 1");
+                        show_desktop = true;
                         break;
                     case "-enhanced_offscreen_fix":
                         enhanced_offscreen_fix = true;
@@ -94,7 +104,7 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                         prompt_session_restore = true;
                         break;
                     case "-halt_restore":
-                        halt_restore = 1;
+                        halt_restore_specified = true;
                         break;
                     case "-notification_on":
                     case "-notification=1":
@@ -125,6 +135,9 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                     case "-auto_restore_missing_windows=3":
                         auto_restore_from_db_at_startup = true;
                         auto_restore_missing_windows = true;
+                        break;
+                    case "-restore_one_window_per_process=1":
+                        restore_one_window_per_process = true;
                         break;
                     case "-check_upgrade=0":
                         check_upgrade = false;
@@ -200,6 +213,7 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             pwp.showRestoreTip = ShowRestoreTip;
             pwp.hideRestoreTip = HideRestoreTip;
             pwp.enableRestoreMenu = EnableRestoreMenu;
+            pwp.showDesktop = show_desktop;
             pwp.redrawDesktop = redraw_desktop;
             pwp.redirectAppDataFolder = redirect_appdata;
             pwp.enhancedOffScreenFix = enhanced_offscreen_fix;
@@ -207,6 +221,7 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             pwp.fixUnminimizedWindow = fix_unminimized_window;
             pwp.promptSessionRestore = prompt_session_restore;
             pwp.autoRestoreMissingWindows = auto_restore_missing_windows;
+            pwp.restoreOneWindowPerProcess = restore_one_window_per_process;
             pwp.haltRestore = halt_restore;
 
             if (!pwp.Start(auto_restore_from_db_at_startup))
@@ -225,8 +240,6 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
 
         static void ShowRestoreTip()
         {
-            var thread = new Thread(() =>
-            {
                 systrayForm.notifyIconMain.Icon = BusyIcon;
 
                 if (silent)
@@ -239,10 +252,6 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                     return;
 
                 systrayForm.notifyIconMain.ShowBalloonTip(5000);
-            });
-
-            thread.IsBackground = false;
-            thread.Start();
         }
 
         static void HideRestoreTip()
@@ -258,10 +267,9 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             systrayForm.notifyIconMain.Visible = true;
         }
 
-        static void EnableRestoreMenu(bool enable)
+        static void EnableRestoreMenu(bool enableRestoreDB)
         {
-            systrayForm.enableRestoreFromDB = enable;
-            systrayForm.enableRefresh = true;
+            systrayForm.UpdateMenuEnable(enableRestoreDB);
         }
 
         static public void CaptureSnapshot(int id, bool prompt = true)
@@ -273,6 +281,12 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
                 if (prompt)
                     systrayForm.notifyIconMain.ShowBalloonTip(5000, $"snapshot '{c}' is captured", $"click icon then immediately press key '{c}' to restore the snapshot", ToolTipIcon.Info);
             }
+        }
+
+        static public void ChangeZorderMethod()
+        {
+            pwp.fixZorderMethod++;
+            systrayForm.notifyIconMain.Text = $"{Application.ProductName} {Application.ProductVersion} {pwp.fixZorderMethod}";
         }
 
         static public char SnapshotIdToChar(int id)
@@ -355,6 +369,7 @@ namespace Ninjacrab.PersistentWindows.SystrayShell
             pwp.restoringFromMem = true;
             pwp.StartRestoreTimer();
         }
+
         static void GetProcessInfo()
         {
             Process process = new Process();
